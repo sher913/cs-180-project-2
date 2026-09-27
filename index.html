@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CS180 Project 2: Fun with Filters and Frequencies</title>
+    <style>
+        :root {
+            --bg-color: #121212;
+            --text-color: #e0e0e0;
+            --accent-color: #bb86fc;
+            --secondary-bg: #1e1e1e;
+            --border-color: #333;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            line-height: 1.6;
+            margin: 0;
+            padding: 0;
+        }
+
+        header {
+            background-color: var(--secondary-bg);
+            padding: 3rem 1rem;
+            text-align: center;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        header h1 {
+            margin: 0;
+            font-size: 2.5rem;
+            color: var(--accent-color);
+        }
+
+        header p {
+            font-size: 1.2rem;
+            color: #aaa;
+            margin-top: 10px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        h2 {
+            color: var(--accent-color);
+            border-bottom: 2px solid var(--border-color);
+            padding-bottom: 10px;
+            margin-top: 3rem;
+        }
+
+        h3 {
+            color: #fff;
+            margin-top: 2rem;
+        }
+
+        .gallery {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .gallery-item {
+            background-color: var(--secondary-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 15px;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        }
+
+        .gallery-item img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 4px;
+        }
+
+        .gallery-item p {
+            margin: 15px 0 0;
+            font-size: 0.95rem;
+            color: #ccc;
+        }
+
+        .large-img {
+            text-align: center;
+            margin: 20px 0;
+        }
+
+        .large-img img {
+            max-width: 100%;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+        }
+        
+        .row-gallery {
+            display: flex;
+            flex-direction: row;
+            justify-content: center;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        
+        .row-gallery .gallery-item {
+            flex: 1;
+            min-width: 150px;
+        }
+
+        code {
+            background: #2a2a2a;
+            padding: 2px 6px;
+            border-radius: 4px;
+            color: #ffb86c;
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>Project 2: Fun with Filters and Frequencies</h1>
+    <p>Sherman Chan | CS 180 (Computer Vision and Computational Photography)</p>
+</header>
+
+<div class="container">
+    
+    <h2>Part 1: Fun with Filters</h2>
+    <p>In this section, we build intuition for 2D convolutions and frequency filtering by detecting edges using finite difference operators.</p>
+
+    <h3>Part 1.1: Convolutions from Scratch</h3>
+    <p>We first implement a 2D convolution engine completely from scratch using numpy array operations (without using `scipy.signal.convolve2d`). Below are the implementations for a pure 4 nested for-loop approach, and an optimized 2-loop vectorized approach.</p>
+    
+    <pre><code>def conv2d_4loops(image, kernel, mode='same'):
+    """2D Convolution using 4 nested for-loops."""
+    kernel = np.flipud(np.fliplr(kernel))
+    i_h, i_w = image.shape
+    k_h, k_w = kernel.shape
+    pad_h = k_h // 2
+    pad_w = k_w // 2
+    padded_img = np.pad(image, ((pad_h, pad_h), (pad_w, pad_w)), mode='constant')
+    out_h = i_h if mode == 'same' else i_h + k_h - 1
+    out_w = i_w if mode == 'same' else i_w + k_w - 1
+    output = np.zeros((out_h, out_w), dtype=np.float32)
+    for y in range(out_h):
+        for x in range(out_w):
+            for i in range(k_h):
+                for j in range(k_w):
+                    output[y, x] += padded_img[y + i, x + j] * kernel[i, j]
+    return output
+
+def conv2d_2loops(image, kernel, mode='same'):
+    """2D Convolution using 2 nested for-loops (vectorized over the kernel)."""
+    kernel = np.flipud(np.fliplr(kernel))
+    i_h, i_w = image.shape
+    k_h, k_w = kernel.shape
+    pad_h = k_h // 2
+    pad_w = k_w // 2
+    padded_img = np.pad(image, ((pad_h, pad_h), (pad_w, pad_w)), mode='constant')
+    out_h = i_h if mode == 'same' else i_h + k_h - 1
+    out_w = i_w if mode == 'same' else i_w + k_w - 1
+    output = np.zeros((out_h, out_w), dtype=np.float32)
+    for y in range(out_h):
+        for x in range(out_w):
+            output[y, x] = np.sum(padded_img[y:y+k_h, x:x+k_w] * kernel)
+    return output</code></pre>
+
+    <p><strong>Runtime & Boundaries:</strong> Comparing our implementation with <code>scipy.signal.convolve2d</code>, the runtime difference is staggering. Our nested loops in Python run in O(N*M*K*L) which takes several seconds per image, whereas Scipy relies on highly-optimized C code that finishes almost instantly. For boundary handling, our implementation uses zero-padding (<code>mode='constant'</code>), which artificially darkens the edges of the image. Scipy offers padding modes like <code>'symm'</code> or <code>'boundary'</code> which mirror or extend the edge pixels, preventing artificial dark borders.</p>
+
+
+    <p>Using our custom engine, we ran a 9x9 box filter and the `Dx`/`Dy` finite difference operators over a custom selfie using the following filters:</p>
+
+    <pre><code># 1. 9x9 Box Filter
+box_filter = np.ones((9, 9), dtype=np.float32) / 81.0
+img_box = conv2d_2loops(img, box_filter)
+
+# 2. Finite Difference Operators
+Dx = np.array([[1, -1]], dtype=np.float32)
+Dy = np.array([[1], [-1]], dtype=np.float32)
+
+img_dx = conv2d_2loops(img, Dx)
+img_dy = conv2d_2loops(img, Dy)</code></pre>
+
+
+    <div class="gallery">
+        <div class="gallery-item">
+            <img src="data/selfie.jpg" alt="Selfie">
+            <p>Original Selfie</p>
+        </div>
+        <div class="gallery-item">
+            <img src="output/box_blur.jpg" alt="Box Blur">
+            <p>9x9 Box Filter Blur</p>
+        </div>
+        <div class="gallery-item">
+            <img src="output/dx_edge.jpg" alt="Dx">
+            <p>D_x Edge Output</p>
+        </div>
+        <div class="gallery-item">
+            <img src="output/dy_edge.jpg" alt="Dy">
+            <p>D_y Edge Output</p>
+        </div>
+    </div>
+
+    <h3>Part 1.2: Finite Difference Operator</h3>
+    <p>We first compute the partial derivatives of the <code>cameraman.png</code> image using the finite difference operators <code>D_x = [1, -1]</code> and <code>D_y = [1, -1]^T</code>. We then compute the gradient magnitude image <code>sqrt(dx^2 + dy^2)</code> and binarize it using a threshold of 0.3. This threshold was specifically chosen because it successfully suppresses the vast majority of the high-frequency background noise in the grass while retaining the continuous, solid outline of the cameraman's coat and tripod.</p>
+    
+    <div class="gallery">
+        <div class="gallery-item">
+            <img src="output/1_2_cameraman_dx.jpg" alt="Dx">
+            <p>D_x (Partial Derivative in X)</p>
+        </div>
+        <div class="gallery-item">
+            <img src="output/1_2_cameraman_dy.jpg" alt="Dy">
+            <p>D_y (Partial Derivative in Y)</p>
+        </div>
+        <div class="gallery-item">
+            <img src="output/1_2_gradient_magnitude.jpg" alt="Gradient Magnitude">
+            <p>Gradient Magnitude</p>
+        </div>
+        <div class="gallery-item">
+            <img src="output/1_2_binarized_edges.jpg" alt="Binarized Edges">
+            <p>Binarized Edges (Threshold = 0.3)</p>
+        </div>
+    </div>
+
+    <h3>1.2 Derivative of Gaussian (DoG) Filter</h3>
+    <p>The finite difference operator is highly sensitive to noise. To improve our edge detection, we first apply a Gaussian low-pass filter (sigma=2) to smooth the image before calculating derivatives. Compared to the raw finite difference method in 1.2, the Gaussian-smoothed edges are significantly thicker, more continuous, and contain far less high-frequency speckle noise from the grass.</p>
+    
+    <div class="gallery">
+        <div class="gallery-item">
+            <img src="output/1_3_blurred_gradient_magnitude.jpg" alt="Blurred Gradient">
+            <p>Smoothed Gradient Magnitude</p>
+        </div>
+        <div class="gallery-item">
+            <img src="output/1_3_blurred_binarized_edges.jpg" alt="Blurred Binarized Edges">
+            <p>Binarized Edges (Gaussian Smoothed)</p>
+        </div>
+    </div>
+    
+    <p>By the associative property of convolution, we can pre-convolve the Gaussian filter with the <code>D_x</code> and <code>D_y</code> operators to create Derivative of Gaussian (DoG) filters. Convolving the original image directly with these DoG filters yields the exact same results as blurring and then differentiating.</p>
+
+    <div class="gallery">
+        <div class="gallery-item">
+            <img src="output/1_3_DoG_x_filter.jpg" alt="DoG X Filter">
+            <p>DoG Filter (X)</p>
+        </div>
+        <div class="gallery-item">
+            <img src="output/1_3_DoG_y_filter.jpg" alt="DoG Y Filter">
+            <p>DoG Filter (Y)</p>
+        </div>
+        <div class="gallery-item">
+            <img src="output/1_3_DoG_binarized_edges.jpg" alt="DoG Binarized Edges">
+            <p>Binarized Edges (Using single DoG convolution)</p>
+        </div>
+    </div>
+
+    <h3>Bells & Whistles: Colorful Gradient Orientation</h3>
+    <p>Instead of just plotting the magnitude of the gradient, we can also compute the gradient angle <code>arctan(dy/dx)</code>. By mapping the gradient angle to the Hue channel in HSV color space, and the gradient magnitude to the Value channel, we can visualize both edge strength and direction simultaneously!</p>
+    
+    <div class="gallery">
+        <div class="gallery-item">
+            <img src="output/1_BW_gradient_orientation.jpg" alt="HSV Gradient Orientation">
+            <p>Cameraman Edge Orientations</p>
+        </div>
+        <div class="gallery-item">
+            <img src="output/1_BW_color_legend.jpg" alt="Color Legend">
+            <p>Color Wheel Legend</p>
+        </div>
+    </div>
+
+
+    <h2>Part 2: Fun with Frequencies</h2>
+    
+    <h3>2.1 Image Sharpening (Unsharp Mask Filter)</h3>
+    <p>We can sharpen an image by extracting its high frequencies (Original - Gaussian Blurred) and adding a scaled amount of them back into the original image. Below is the Unsharp Mask applied to the Taj Mahal.</p>
+
+    
+    <div class="gallery">
+        <div class="gallery-item">
+            <img src="data/taj.jpg" alt="Original Taj">
+            <p>Original Taj Mahal</p>
+        </div>
+        <div class="gallery-item">
+            <img src="output/2_1_taj_blurred.jpg" alt="Blurred Taj">
+            <p>Gaussian Blurred</p>
+        </div>
+        <div class="gallery-item">
+            <img src="output/2_1_taj_highfreq.jpg" alt="High Freq Taj">
+            <p>High Frequencies (Original - Blurred)</p>
+        </div>
+        <div class="gallery-item">
+            <img src="output/2_1_taj_sharpened_a2.0.jpg" alt="Sharpened Taj">
+            <p>Sharpened (Alpha = 2.0)</p>
+        </div>
+    </div>
+
+    <p>We also tested varying amounts of sharpening on another image (Coffee).</p>
+    <div class="gallery">
+        <div class="gallery-item">
+            <img src="data/coffee.jpg" alt="Original Coffee">
+            <p>Original Coffee</p>
+        </div>
+        <div class="gallery-item">
+            <img src="output/2_1_coffee_a1.0.jpg" alt="Coffee a1">
+            <p>Sharpened (Alpha = 1.0)</p>
+        </div>
+        <div class="gallery-item">
+            <img src="output/2_1_coffee_a3.0.jpg" alt="Coffee a3">
+            <p>Sharpened (Alpha = 3.0)</p>
+        </div>
+        <div class="gallery-item">
+            <img src="output/2_1_coffee_a5.0.jpg" alt="Coffee a5">
+            <p>Sharpened (Alpha = 5.0)</p>
+        </div>
+    </div>
+
+
+    <p><strong>Evaluation:</strong> To evaluate our sharpening algorithm, we take a perfectly sharp image, blur it, and then attempt to resharpen it. We tested this on the custom selfie image. As seen below, the resharpened image regains its hard outlines, but the fine, tiny textures (like the hair and fabric details) look a bit cartoonish. This happens because the heavy blur completely destroyed the microscopic frequencies, and sharpening can only exaggerate what is left over—it can't magically invent destroyed data!</p>
+    
+    <div class="gallery">
+        <div class="gallery-item">
+            <img src="data/selfie.jpg" alt="Original Selfie">
+            <p>1. Original Image</p>
+        </div>
+        <div class="gallery-item">
+            <img src="output/2_1_eval_blurred.jpg" alt="Blurred">
+            <p>2. Blurred (Sigma = 3.0)</p>
+        </div>
+        <div class="gallery-item">
+            <img src="output/2_1_eval_resharpened.jpg" alt="Resharpened">
+            <p>3. Resharpened (Alpha = 3.0)</p>
+        </div>
+    </div>
+
+    <h3>2.2 Hybrid Images</h3>
+    <p>A hybrid image combines the high frequencies of one image with the low frequencies of another. Because human visual perception relies heavily on high frequencies up close, and low frequencies from afar, the image changes entirely depending on your viewing distance!</p>
+
+    
+    <p><strong>Example 1: Derek & Nutmeg</strong></p>
+    <p>For this hybrid, we used a high-frequency cutoff of <code>sigma = 5.0</code> for Nutmeg and a low-frequency cutoff of <code>sigma = 7.0</code> for Derek. Below is the entire process from the aligned images, to the filtered results, and finally the Hybrid image.</p>
+    
+    <div style="display: flex; flex-direction: column; align-items: center; gap: 30px; background-color: #1a1a1a; padding: 30px; border-radius: 12px; border: 1px solid #333; margin-bottom: 20px;">
+        <div style="display: flex; flex-direction: row; justify-content: center; gap: 20px; flex-wrap: wrap; width: 100%;">
+            <div style="text-align: center; flex: 1; min-width: 150px; max-width: 250px;">
+                <img src="output/2_2_aligned_high_freq.jpg" alt="Nutmeg Aligned" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.4);">
+                <p style="color: #bbb; margin-top: 10px; font-size: 0.95rem;">Nutmeg (Aligned)</p>
+            </div>
+            <div style="text-align: center; flex: 1; min-width: 150px; max-width: 250px;">
+                <img src="output/2_2_high_freq_component.jpg" alt="Nutmeg High Pass" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.4);">
+                <p style="color: #bbb; margin-top: 10px; font-size: 0.95rem;">High Pass Filter</p>
+            </div>
+            <div style="text-align: center; flex: 1; min-width: 150px; max-width: 250px;">
+                <img src="output/2_2_aligned_low_freq.jpg" alt="Derek Aligned" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.4);">
+                <p style="color: #bbb; margin-top: 10px; font-size: 0.95rem;">Derek (Aligned)</p>
+            </div>
+            <div style="text-align: center; flex: 1; min-width: 150px; max-width: 250px;">
+                <img src="output/2_2_low_freq_component.jpg" alt="Derek Low Pass" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.4);">
+                <p style="color: #bbb; margin-top: 10px; font-size: 0.95rem;">Low Pass Filter</p>
+            </div>
+        </div>
+
+        <div style="text-align: center; width: 100%; max-width: 400px; margin-top: 10px;">
+            <img src="output/2_2_hybrid.jpg" alt="Derek Nutmeg Hybrid" style="width: 100%; border-radius: 8px; border: 2px solid #555; box-shadow: 0 8px 24px rgba(0,0,0,0.8);">
+            <p style="margin-top: 15px; font-size: 1.15rem; color: #fff;"><em><strong>Final Hybrid:</strong> Up close Nutmeg | Far away Derek</em></p>
+        </div>
+    </div>
+
+    <h4>Frequency Analysis (2D Fourier Transforms)</h4>
+    <p>Here is the breakdown of the frequency domains during the creation of the Derek & Nutmeg hybrid.</p>
+    <div class="large-img">
+        <img src="output/2_2_fourier_analysis.jpg" alt="Fourier Transforms">
+    </div>
+
+
+<p><strong>Example 2: SY & Lord Farquaad (Lord FUHHH)</strong></p>
+    
+    <div style="display: flex; flex-direction: column; align-items: center; gap: 30px; background-color: #1a1a1a; padding: 30px; border-radius: 12px; border: 1px solid #333; margin-bottom: 40px;">
+        <div style="display: flex; flex-direction: row; justify-content: center; gap: 20px; flex-wrap: wrap; width: 100%;">
+            <div style="text-align: center; flex: 1; min-width: 150px; max-width: 250px;">
+                <img src="output/high_aligned.jpg" alt="SY Aligned" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.4);">
+                <p style="color: #bbb; margin-top: 10px; font-size: 0.95rem;">SY (Aligned)</p>
+            </div>
+            <div style="text-align: center; flex: 1; min-width: 150px; max-width: 250px;">
+                <img src="output/high_pass.jpg" alt="SY High Pass" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.4);">
+                <p style="color: #bbb; margin-top: 10px; font-size: 0.95rem;">High Pass Filter</p>
+            </div>
+            <div style="text-align: center; flex: 1; min-width: 150px; max-width: 250px;">
+                <img src="output/low_aligned.jpg" alt="Farquaad Aligned" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.4);">
+                <p style="color: #bbb; margin-top: 10px; font-size: 0.95rem;">Farquaad (Aligned)</p>
+            </div>
+            <div style="text-align: center; flex: 1; min-width: 150px; max-width: 250px;">
+                <img src="output/low_pass.jpg" alt="Farquaad Low Pass" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.4);">
+                <p style="color: #bbb; margin-top: 10px; font-size: 0.95rem;">Low Pass Filter</p>
+            </div>
+        </div>
+
+        <div style="text-align: center; width: 100%; max-width: 600px; margin-top: 10px;">
+            <img src="output/hybrid_result_lord%20fuhhh.jpg" alt="Lord FUHHH Hybrid" style="width: 100%; border-radius: 8px; border: 2px solid #555; box-shadow: 0 8px 24px rgba(0,0,0,0.8);">
+            <p style="margin-top: 15px; font-size: 1.15rem; color: #fff;"><em><strong>Final Hybrid:</strong> Up close SY | Far away Farquaad</em></p>
+        </div>
+    </div>
+
+
+<p><strong>Example 3: Earth & Mars (Change over time/planets)</strong></p>
+    <div class="large-img">
+        <img src="output/2_2_real_hybrid_earth_mars.jpg" alt="Earth Mars Hybrid" style="max-width: 500px;">
+        <p><em>Up close: Earth | Far away: Mars</em></p>
+    </div>
+
+    <h3>Bells & Whistles: Using Color in Hybrid Images</h3>
+    <p>In our implementation, we applied the filtering math across all three RGB channels, retaining full color for both the high-frequency and low-frequency components. Through experimentation, we found that <strong>using color for the low-frequency component works significantly better</strong> than using color for the high-frequency component.</p>
+    <p>Because human perception relies on color as a low-frequency cue, retaining color in the low-frequency background (e.g., the blue oceans of Earth or the orange fur of the Cat) helps the brain "lock in" to that image from a distance. If the high-frequency image retains vibrant colors, those colors tend to bleed visually and aggressively distract the eye, making it much harder for the illusion to work effectively from afar. In our optimal results, having a subtle or grayscale high-frequency overlay over a vibrant low-frequency background provided the most convincing optical illusion.</p>
+
+
+    <h3>2.3 Gaussian and Laplacian Stacks</h3>
+    <p>Instead of a standard image pyramid, we can build a Laplacian stack without downsampling. By taking the difference between consecutive levels of a Gaussian stack, we isolate specific frequency bands. Below are the Laplacian stack levels of the "Oraple" (Apple + Orange).</p>
+    
+    <div class="row-gallery">
+        <div class="gallery-item"><img src="output/2_3_oraple_level_0.jpg"><p>Level 0 (Highest Freq)</p></div>
+        <div class="gallery-item"><img src="output/2_3_oraple_level_1.jpg"><p>Level 1</p></div>
+        <div class="gallery-item"><img src="output/2_3_oraple_level_2.jpg"><p>Level 2</p></div>
+        <div class="gallery-item"><img src="output/2_3_oraple_level_3.jpg"><p>Level 3</p></div>
+        <div class="gallery-item"><img src="output/2_3_oraple_level_4.jpg"><p>Level 4</p></div>
+        <div class="gallery-item"><img src="output/2_3_oraple_level_5.jpg"><p>Level 5 (Lowest Freq)</p></div>
+    </div>
+
+    <p>We also computed the Laplacian stacks for the original Apple and Orange images prior to blending them.</p>
+    
+    <div class="row-gallery">
+        <div class="gallery-item"><img src="output/2_3_apple_laplacian_0.jpg"><p>Apple L0</p></div>
+        <div class="gallery-item"><img src="output/2_3_apple_laplacian_1.jpg"><p>Apple L1</p></div>
+        <div class="gallery-item"><img src="output/2_3_apple_laplacian_2.jpg"><p>Apple L2</p></div>
+        <div class="gallery-item"><img src="output/2_3_apple_laplacian_3.jpg"><p>Apple L3</p></div>
+        <div class="gallery-item"><img src="output/2_3_apple_laplacian_4.jpg"><p>Apple L4</p></div>
+        <div class="gallery-item"><img src="output/2_3_apple_laplacian_5.jpg"><p>Apple L5</p></div>
+    </div>
+    
+    <div class="row-gallery">
+        <div class="gallery-item"><img src="output/2_3_orange_laplacian_0.jpg"><p>Orange L0</p></div>
+        <div class="gallery-item"><img src="output/2_3_orange_laplacian_1.jpg"><p>Orange L1</p></div>
+        <div class="gallery-item"><img src="output/2_3_orange_laplacian_2.jpg"><p>Orange L2</p></div>
+        <div class="gallery-item"><img src="output/2_3_orange_laplacian_3.jpg"><p>Orange L3</p></div>
+        <div class="gallery-item"><img src="output/2_3_orange_laplacian_4.jpg"><p>Orange L4</p></div>
+        <div class="gallery-item"><img src="output/2_3_orange_laplacian_5.jpg"><p>Orange L5</p></div>
+    </div>
+
+
+
+    <h3>2.4 Multiresolution Blending</h3>
+    <p>By blending two images at each frequency band of their Laplacian stacks (using a Gaussian-blurred mask), we can seamlessly merge images together without visible seams or ghosting!</p>
+
+    <div class="gallery">
+        <div class="gallery-item">
+            <img src="output/2_4_real_oraple.jpg" alt="Real Oraple">
+            <p><strong>The Oraple</strong><br>Vertical Mask</p>
+        </div>
+        <div class="gallery-item">
+            <img src="output/2_4_real_sun_moon.jpg" alt="Sun Moon Blend">
+            <p><strong>The Sun & Moon</strong><br>Irregular Circular Mask</p>
+        </div>
+        <div class="gallery-item">
+            <img src="output/2_4_winter_summer.jpg" alt="Winter Summer Blend">
+            <p><strong>Winter & Summer</strong><br>Diagonal Mask</p>
+        </div>
+
+    </div>
+
+
+    <h3>Bells & Whistles: Colorful Multiresolution Blending</h3>
+    <p>For the multiresolution blending, we extended the 1D Gaussian and Laplacian stacks to operate across all 3 color channels (RGB) independently. By building identical masks for each channel, we successfully preserved the vibrant colors of the Apple, Orange, Sun, Moon, and Seasons without any color fringing at the boundaries. Blending in RGB space turned out to be extremely effective because the low-frequency color bleeds match the high-frequency texture seams perfectly, creating a highly realistic fusion.</p>
+
+    <h2>What I Learned</h2>
+    <p>The most important thing I learned from this project is the sheer power of frequency decomposition in human visual perception. I never realized that our eyes naturally filter images by distance - prioritizing high-frequency edges up close, but relying entirely on low-frequency blobs and color gradients from afar. Being able to mathematically pull apart an image into its frequency bands using simple Gaussian convolutions, and then recombine them to trick the human brain (like in the Hybrid Images) or seamlessly stitch two un-alike objects (like the Oraple) was mind-blowing to see in practice!</p>
+</div>
+</body>
+</html>
+
